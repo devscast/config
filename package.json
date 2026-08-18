@@ -1,7 +1,7 @@
 {
   "author": "bernard-ng <bernard@devscast.tech>",
   "bugs": {
-    "url": "https://github.com/devscast/config-ts/issues"
+    "url": "https://github.com/devscast/config/issues"
   },
   "commitlint": {
     "extends": [
@@ -43,7 +43,7 @@
     "dist",
     "README.md"
   ],
-  "homepage": "https://github.com/devscast/config-ts#readme",
+  "homepage": "https://github.com/devscast/config#readme",
   "keywords": [
     "config",
     "dotenv",
@@ -75,7 +75,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/devscast/config-ts.git"
+    "url": "git+https://github.com/devscast/config.git"
   },
   "scripts": {
     "build": "tsup --minify",
@@ -85,7 +85,7 @@
     "lint": "biome check .",
     "prepack": "bun run build",
     "prepare": "husky",
-    "release": "npm publish --access public --provenance",
+    "release": "npm publish --access public",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
