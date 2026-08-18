@@ -18,7 +18,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -37,6 +37,14 @@ jobs:
       - name: Run Type Checker
         run: |
           bun run typecheck
+
+      - name: Build Package
+        run: |
+          bun run build
+
+      - name: Validate Package Surface
+        run: |
+          bun run check:package
 
   lint:
     name: lint

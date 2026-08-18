@@ -1,14 +1,30 @@
+export { defineConfig } from "./config";
+export { type EnvironmentInput, type ParseDotenvOptions, parseDotenv } from "./dotenv";
 export {
-  ConfigError,
-  ConfigFileNotFoundError,
-  type ConfigFormat,
-  ConfigParseError,
-  type ConfigResult,
-  type ConfigSource,
-  ConfigValidationError,
-  type DefineConfigOptions,
-  type LoadConfigOptions,
-  defineConfig,
-} from "./config";
-export { FormatError, PathError, default as Dotenv } from "./dotenv";
-export { type EnvAccessor, type EnvLookupOptions, createEnvAccessor, env } from "./env";
+  ConfigurationError,
+  type ConfigurationErrorCode,
+  type ConfigurationIssue,
+} from "./errors";
+export {
+  inline,
+  jsonFile,
+  provider,
+  yamlFile,
+} from "./sources";
+export type {
+  ConfigMetadata,
+  ConfigObject,
+  ConfigResult,
+  ConfigSource,
+  DeepReadonly,
+  DefineConfigOptions,
+  EnvironmentFile,
+  EnvironmentMetadata,
+  EnvironmentOptions,
+  FileSourceOptions,
+  InlineSource,
+  JsonSource,
+  ProviderSource,
+  SourceMetadata,
+  YamlSource,
+} from "./types";

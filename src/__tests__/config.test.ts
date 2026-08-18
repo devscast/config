@@ -1,314 +1,400 @@
 import path from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as z from "zod";
+import * as mini from "zod/mini";
 
-import {
-  ConfigFileNotFoundError,
-  ConfigParseError,
-  ConfigValidationError,
-  defineConfig,
-} from "../config";
+import { defineConfig } from "../config";
+import { ConfigurationError } from "../errors";
+import { inline, jsonFile, provider, yamlFile } from "../sources";
 
-const fixturesDir = path.resolve(__dirname, "fixtures");
-const envDir = path.join(fixturesDir, "env");
+const fixtures = path.resolve(__dirname, "fixtures");
+const environmentFixtures = path.join(fixtures, "env");
 
-let envSnapshot: NodeJS.ProcessEnv;
-
-beforeEach(() => {
-  envSnapshot = { ...process.env };
-  delete process.env.NODE_DOTENV_VARS;
-});
-
-afterEach(() => {
-  for (const key of Object.keys(process.env)) {
-    if (!(key in envSnapshot)) {
-      delete process.env[key];
-    }
-  }
-  for (const [key, value] of Object.entries(envSnapshot)) {
-    if (value === undefined) {
-      delete process.env[key];
-    } else {
-      process.env[key] = value;
-    }
-  }
-  delete process.env.NODE_DOTENV_VARS;
+const configurationSchema = z.object({
+  database: z.object({
+    host: z.string(),
+    password: z.string(),
+    port: z.number(),
+    username: z.string(),
+  }),
+  features: z.array(z.string()),
 });
 
 describe("defineConfig", () => {
-  it("loads configuration from JSON", () => {
-    const schema = z.object({
-      database: z.object({
-        host: z.string(),
-        password: z.string(),
-        port: z.number(),
-        username: z.string(),
-      }),
-      features: z.array(z.string()),
+  it("loads explicit JSON, YAML, and inline sources with deterministic precedence", async () => {
+    const result = await defineConfig({
+      schema: configurationSchema,
+      sources: [
+        jsonFile("config.json", { name: "base" }),
+        yamlFile("config.yaml", { name: "deployment" }),
+        inline({ database: { password: "runtime-secret" } }, { name: "runtime" }),
+      ],
+      cwd: fixtures,
     });
 
-    const { config } = defineConfig({
-      env: false,
-      schema,
-      sources: path.join(fixturesDir, "config.json"),
-    });
-
-    expect(config.database.host).toBe("localhost");
-    expect(config.database.port).toBe(5432);
-    expect(config.features).toEqual(["analytics", "notifications"]);
-  });
-
-  it("loads configuration from YAML", () => {
-    const schema = z.object({
-      database: z.object({
-        host: z.string(),
-        password: z.string(),
-        port: z.number(),
-        username: z.string(),
-      }),
-      features: z.array(z.string()),
-    });
-
-    const { config } = defineConfig({
-      env: false,
-      schema,
-      sources: path.join(fixturesDir, "config.yaml"),
-    });
-
-    expect(config.database).toMatchObject({
+    expect(result.config.database).toMatchObject({
       host: "localhost",
-      password: "securepassword",
+      password: "runtime-secret",
       port: 5432,
       username: "admin",
     });
-    expect(config.features).toEqual(["analytics", "notifications"]);
+    expect(result.metadata.provenance["database.host"]).toBe("deployment");
+    expect(result.metadata.provenance["database.password"]).toBe("runtime");
+    expect(result.metadata.sources.map((source) => source.type)).toEqual([
+      "json",
+      "yaml",
+      "inline",
+    ]);
   });
 
-  it("loads configuration from INI", () => {
-    const schema = z.object({
-      database: z.object({
-        host: z.string(),
-        password: z.string(),
-        port: z.coerce.number(),
-        username: z.string(),
-      }),
-      features: z.object({
-        items: z.array(z.string()),
-      }),
+  it("returns deeply immutable configuration, environment, and metadata", async () => {
+    const result = await defineConfig({
+      schema: z.object({ nested: z.object({ enabled: z.boolean() }) }),
+      sources: [inline({ nested: { enabled: true } })],
     });
 
-    const { config } = defineConfig({
-      env: false,
-      schema,
-      sources: path.join(fixturesDir, "config.ini"),
-    });
-
-    expect(config.database.port).toBe(5432);
-    expect(config.features.items).toEqual(["analytics", "notifications"]);
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.config)).toBe(true);
+    expect(Object.isFrozen(result.config.nested)).toBe(true);
+    expect(Object.isFrozen(result.metadata.sources)).toBe(true);
   });
 
-  it("merges multiple sources with later overrides", () => {
-    const schema = z.object({
-      database: z.object({
-        host: z.string(),
-        password: z.string(),
-        port: z.number(),
-        username: z.string(),
-      }),
-      features: z.array(z.string()),
-    });
-
-    const { config } = defineConfig({
-      defaults: {
-        database: { host: "default", password: "default", port: 1000, username: "default" },
-        features: ["defaults"],
-      },
-      env: false,
-      schema,
+  it("records skipped optional files", async () => {
+    const result = await defineConfig({
+      defaults: { key: "default" },
+      schema: z.object({ key: z.string() }),
       sources: [
-        path.join(fixturesDir, "config.json"),
-        path.join(fixturesDir, "config.yaml"),
-        { database: { password: "overridden" } },
+        jsonFile("missing.json", { optional: true }),
+        inline({ key: "inline" }, { name: "override" }),
       ],
+      cwd: fixtures,
     });
 
-    expect(config.database.password).toBe("overridden");
-    expect(config.database.host).toBe("localhost");
-    expect(config.features).toEqual(["analytics", "notifications"]);
+    expect(result.config.key).toBe("inline");
+    expect(result.metadata.sources[0]).toMatchObject({ loaded: false, optional: true });
   });
 
-  it("replaces placeholders using environment files", () => {
-    const schema = z.object({
-      database: z.object({
-        host: z.string(),
-        password: z.string(),
-        port: z.number(),
-        username: z.string(),
-      }),
-      services: z.object({
-        url: z.string(),
-      }),
+  it("supports providers returning promises or immediate values", async () => {
+    const asyncResult = await defineConfig({
+      schema: z.object({ region: z.string() }),
+      sources: [provider("secret-manager", async () => ({ region: "af-south-1" }))],
+    });
+    const immediateResult = await defineConfig({
+      schema: z.object({ region: z.string() }),
+      sources: [provider("local-provider", () => ({ region: "local" }))],
     });
 
-    const { config } = defineConfig({
-      env: {
-        defaultEnv: "dev",
-        environment: "prod",
-        path: path.join(envDir, ".env"),
-      },
-      schema,
-      sources: path.join(fixturesDir, "config.env.yaml"),
-    });
-
-    expect(config.database.host).toBe("from-env-prod-local");
-    expect(config.database.username).toBe("from-env-user");
-    expect(config.database.password).toBe("from-env-prod-password");
-    expect(config.services.url).toBe("https://prod-local-api.internal/v1");
+    expect(asyncResult.config.region).toBe("af-south-1");
+    expect(immediateResult.config.region).toBe("local");
   });
 
-  it("supports inline configuration objects after loading env files", () => {
-    const schema = z.object({
-      database: z.object({
-        host: z.string(),
-        port: z.number(),
-      }),
-      featureFlags: z.string(),
-    });
-
-    const { config } = defineConfig({
-      env: {
-        defaultEnv: "dev",
-        environment: "prod",
-        path: path.join(envDir, ".env"),
-      },
-      schema,
-      sources: {
-        database: { host: "%env(DB_HOST)%", port: "%env(number:DB_PORT)%" },
-        featureFlags: "%env(FEATURE_FLAGS)%",
-      },
-    });
-
-    expect(config.database.host).toBe("from-env-prod-local");
-    expect(config.database.port).toBe(7777);
-    expect(config.featureFlags).toBe("one,two,local");
-  });
-
-  it("rejects TypeScript configuration files", () => {
-    const schema = z.object({
-      value: z.optional(z.string()),
-    });
-
-    expect(() =>
+  it("wraps provider failures without exposing their message", async () => {
+    await expect(
       defineConfig({
-        env: false,
-        schema,
-        sources: path.join(fixturesDir, "config.ts"),
+        schema: z.object({ value: z.string() }),
+        sources: [
+          provider("vault", () => {
+            throw new Error("secret-value-was-here");
+          }),
+        ],
       }),
-    ).toThrow(ConfigParseError);
+    ).rejects.toMatchObject({ code: "SOURCE_UNAVAILABLE" });
+
+    try {
+      await defineConfig({
+        schema: z.object({ value: z.string() }),
+        sources: [provider("vault", () => Promise.reject(new Error("secret-value-was-here")))],
+      });
+    } catch (error) {
+      expect((error as Error).message).not.toContain("secret-value-was-here");
+      expect((error as Error & { cause?: unknown }).cause).toBeUndefined();
+    }
   });
 
-  it("throws validation error when schema does not match", () => {
-    const schema = z.object({
-      database: z.object({
-        host: z.string(),
-      }),
+  it("uses an environment schema as the typed source of truth", async () => {
+    const original = process.env.DB_HOST;
+    process.env.DB_HOST = "must-not-be-read";
+
+    const environmentSchema = z.object({
+      API_HOST: z.string(),
+      APP_ENV: z.enum(["dev", "prod", "test"]),
+      DB_HOST: z.string(),
+      DB_PASSWORD: z.string(),
+      DB_PORT: z.coerce.number().int(),
+      DB_USER: z.string(),
+      FEATURE_FLAGS: z.string().transform((value) => value.split(",")),
     });
 
-    expect(() =>
+    try {
+      const result = await defineConfig({
+        environment: {
+          files: ["env/.env", "env/.env.local", "env/.env.prod", "env/.env.prod.local"],
+          processEnv: false,
+          redact: ["DB_PASSWORD"],
+          schema: environmentSchema,
+        },
+        schema: z.object({
+          database: z.object({
+            host: z.string(),
+            password: z.string(),
+            port: z.number(),
+            username: z.string(),
+          }),
+          features: z.array(z.string()),
+          services: z.object({ url: z.url() }),
+        }),
+        sources: [
+          yamlFile("config.env.yaml"),
+          inline({
+            database: { port: "%env(DB_PORT)%" },
+            features: "%env(FEATURE_FLAGS)%",
+          }),
+        ],
+        cwd: fixtures,
+      });
+
+      expect(result.env.DB_PORT).toBe(7777);
+      expect(result.env.FEATURE_FLAGS).toEqual(["one", "two", "local"]);
+      expect(result.config.database.host).toBe("from-env-prod-local");
+      expect(result.config.database.port).toBe(7777);
+      expect(result.config.services.url).toBe("https://prod-local-api.internal/v1");
+      expect(result.metadata.environment.redactedKeys).toEqual(["DB_PASSWORD"]);
+      expect(process.env.DB_HOST).toBe("must-not-be-read");
+    } finally {
+      if (original === undefined) delete process.env.DB_HOST;
+      else process.env.DB_HOST = original;
+    }
+  });
+
+  it("applies file, process, and explicit override precedence without mutation", async () => {
+    const processInput = { VALUE: "process" };
+    const result = await defineConfig({
+      environment: {
+        files: [path.join(environmentFixtures, ".env")],
+        overrides: { VALUE: "override" },
+        processEnv: processInput,
+        schema: z.object({ VALUE: z.string() }),
+      },
+      schema: z.object({ value: z.string() }),
+      sources: [inline({ value: "%env(VALUE)%" })],
+    });
+
+    expect(result.env.VALUE).toBe("override");
+    expect(processInput.VALUE).toBe("process");
+  });
+
+  it("loads and validates environment files asynchronously", async () => {
+    const result = await defineConfig({
+      environment: {
+        files: ["env/.env", { path: "env/missing.env", optional: true }],
+        processEnv: false,
+        schema: z.object({
+          APP_ENV: z.string(),
+          DB_PORT: z.coerce.number(),
+        }),
+      },
+      schema: z.object({ environment: z.string(), port: z.number() }),
+      sources: [inline({ environment: "%env(APP_ENV)%", port: "%env(DB_PORT)%" })],
+      cwd: fixtures,
+    });
+
+    expect(result.env.DB_PORT).toBe(7777);
+    expect(result.config).toEqual({ environment: "prod", port: 7777 });
+    expect(result.metadata.environment.files[1]).toMatchObject({ loaded: false, optional: true });
+  });
+
+  it("reports environment file read failures with stable codes", async () => {
+    await expect(
       defineConfig({
-        env: false,
-        schema,
-        sources: { feature: "flag" } as unknown as Record<string, unknown>,
+        environment: {
+          files: ["env/missing.env"],
+          processEnv: false,
+          schema: z.object({}),
+        },
+        schema: z.object({}),
+        cwd: fixtures,
       }),
-    ).toThrow(ConfigValidationError);
-  });
+    ).rejects.toMatchObject({ code: "ENV_FILE_MISSING" });
 
-  it("throws file not found error when missing required source", () => {
-    const schema = z.object({ ok: z.optional(z.boolean()) });
-
-    expect(() =>
+    await expect(
       defineConfig({
-        env: false,
-        schema,
-        sources: { path: path.join(fixturesDir, "missing.json") },
+        environment: {
+          files: ["env"],
+          processEnv: false,
+          schema: z.object({}),
+        },
+        schema: z.object({}),
+        cwd: fixtures,
       }),
-    ).toThrow(ConfigFileNotFoundError);
+    ).rejects.toMatchObject({ code: "ENV_FILE_INVALID" });
   });
 
-  it("ignores optional sources", () => {
-    const schema = z.object({ key: z.string() });
-    process.env.KEY = "value";
-
-    const { config } = defineConfig({
-      defaults: { key: "fallback" },
-      schema,
-      sources: [
-        { optional: true, path: path.join(fixturesDir, "missing.json") },
-        { key: "%env(KEY)%" },
-      ],
-    });
-
-    expect(config.key).toBe("value");
-  });
-});
-
-describe("typed %env(...)% placeholders", () => {
-  it("supports number placeholders (native type when standalone, string when embedded)", () => {
-    process.env.PORT = "8080";
-
-    const schema = z.object({
-      port: z.number(),
-      url: z.string(),
-    });
-
-    const { config } = defineConfig({
-      env: false,
-      schema,
-      sources: [{ port: "%env(number:PORT)%", url: "http://localhost:%env(number:PORT)%" }],
-    });
-
-    expect(config.port).toBe(8080);
-    expect(typeof config.port).toBe("number");
-    expect(config.url).toBe("http://localhost:8080");
+  it("aggregates environment validation issues and redacts secret diagnostics", async () => {
+    expect.assertions(5);
+    try {
+      await defineConfig({
+        environment: {
+          processEnv: false,
+          overrides: { API_TOKEN: "visible-secret" },
+          redact: ["API_TOKEN"],
+          schema: z.object({
+            API_TOKEN: z.string().min(50),
+            DATABASE_URL: z.url(),
+          }),
+        },
+        schema: z.object({}),
+      });
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigurationError);
+      expect((error as ConfigurationError).code).toBe("ENV_INVALID");
+      expect((error as ConfigurationError).issues).toHaveLength(2);
+      expect((error as Error).message).not.toContain("visible-secret");
+      expect((error as ConfigurationError).issues[0]?.redacted).toBe(true);
+    }
   });
 
-  it("supports boolean placeholders (native type)", () => {
-    process.env.FEATURE_ONE = "true";
-    process.env.FEATURE_TWO = "0"; // falsey
-
-    const schema = z.object({
-      featureOne: z.boolean(),
-      featureTwo: z.boolean(),
-    });
-
-    const { config } = defineConfig({
-      env: false,
-      schema,
-      sources: [
-        { featureOne: "%env(boolean:FEATURE_ONE)%", featureTwo: "%env(boolean:FEATURE_TWO)%" },
-      ],
-    });
-
-    expect(config.featureOne).toBe(true);
-    expect(config.featureTwo).toBe(false);
+  it("aggregates missing environment references with configuration paths", async () => {
+    expect.assertions(3);
+    try {
+      await defineConfig({
+        schema: z.object({ first: z.string(), nested: z.object({ second: z.string() }) }),
+        sources: [inline({ first: "%env(FIRST)%", nested: { second: "%env(SECOND)%" } })],
+      });
+    } catch (error) {
+      expect((error as ConfigurationError).code).toBe("ENV_REFERENCE_MISSING");
+      expect((error as ConfigurationError).issues).toHaveLength(2);
+      expect((error as ConfigurationError).issues.map((issue) => issue.path)).toEqual([
+        ["first"],
+        ["nested", "second"],
+      ]);
+    }
   });
 
-  it("accepts explicit string type and interpolates inside larger strings", () => {
-    process.env.NAME = "service";
-
-    const schema = z.object({
-      location: z.string(),
-      name: z.string(),
+  it("supports Zod Mini schemas", async () => {
+    const result = await defineConfig({
+      environment: {
+        overrides: { VALUE: "mini" },
+        processEnv: false,
+        schema: mini.object({ VALUE: mini.string() }),
+      },
+      schema: mini.object({ value: mini.string() }),
+      sources: [inline({ value: "%env(VALUE)%" })],
     });
 
-    const { config } = defineConfig({
-      env: false,
-      schema,
-      sources: [{ location: "/srv/%env(string:NAME)%/data", name: "%env(string:NAME)%" }],
+    expect(result.env.VALUE).toBe("mini");
+    expect(result.config.value).toBe("mini");
+  });
+
+  it("keeps path as ordinary inline data", async () => {
+    const result = await defineConfig({
+      schema: z.object({ path: z.string() }),
+      sources: [inline({ path: "/literal/application/path" })],
+    });
+    expect(result.config.path).toBe("/literal/application/path");
+  });
+
+  it("preserves special keys without prototype pollution", async () => {
+    const value = JSON.parse('{"__proto__":{"polluted":true},"safe":"yes"}');
+    const result = await defineConfig({
+      schema: z.custom<Record<string, unknown>>(
+        (input) => typeof input === "object" && input !== null,
+      ),
+      sources: [inline(value)],
     });
 
-    expect(config.name).toBe("service");
-    expect(config.location).toBe("/srv/service/data");
+    expect(Object.hasOwn(result.config, "__proto__")).toBe(true);
+    expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+  });
+
+  it("reports missing and malformed sources with stable codes", async () => {
+    await expect(
+      defineConfig({
+        schema: z.object({}),
+        sources: [jsonFile("missing.json")],
+        cwd: fixtures,
+      }),
+    ).rejects.toMatchObject({ code: "SOURCE_MISSING" });
+
+    await expect(
+      defineConfig({
+        schema: z.object({}),
+        sources: [jsonFile("config.unsupported")],
+        cwd: fixtures,
+      }),
+    ).rejects.toMatchObject({ code: "SOURCE_INVALID" });
+
+    await expect(
+      defineConfig({
+        schema: z.object({}),
+        sources: [yamlFile("config.invalid.yaml")],
+        cwd: fixtures,
+      }),
+    ).rejects.toMatchObject({ code: "SOURCE_INVALID" });
+  });
+
+  it("rejects invalid defaults and provider values", async () => {
+    await expect(
+      defineConfig({
+        defaults: [] as never,
+        schema: z.object({}),
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_OPTIONS" });
+
+    await expect(
+      defineConfig({
+        schema: z.object({}),
+        sources: [provider("invalid", () => [] as unknown as Record<string, unknown>)],
+      }),
+    ).rejects.toMatchObject({ code: "SOURCE_INVALID" });
+  });
+
+  it("rejects cyclic and mutable object values before freezing results", async () => {
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+
+    await expect(
+      defineConfig({
+        schema: z.object({}),
+        sources: [inline(cyclic)],
+      }),
+    ).rejects.toMatchObject({ code: "SOURCE_INVALID" });
+
+    await expect(
+      defineConfig({
+        schema: z.object({ value: z.string() }).transform(() => new Date()),
+        sources: [inline({ value: "date" })],
+      }),
+    ).rejects.toMatchObject({ code: "CONFIG_INVALID" });
+  });
+
+  it("aggregates configuration schema issues", async () => {
+    try {
+      await defineConfig({
+        schema: z.object({ enabled: z.boolean(), port: z.number() }),
+        sources: [inline({ enabled: "yes", port: "invalid" })],
+      });
+    } catch (error) {
+      expect((error as ConfigurationError).code).toBe("CONFIG_INVALID");
+      expect((error as ConfigurationError).issues).toHaveLength(2);
+      expect(Object.isFrozen((error as ConfigurationError).issues[0]?.path)).toBe(true);
+    }
+  });
+
+  it("supports async configuration and environment schema validation", async () => {
+    const schema = z.object({ value: z.string().refine(async () => true) });
+    const asyncResult = await defineConfig({ schema, sources: [inline({ value: "ok" })] });
+    expect(asyncResult.config.value).toBe("ok");
+
+    const environmentSchema = z.object({ VALUE: z.string().refine(async () => true) });
+    const environmentResult = await defineConfig({
+      environment: {
+        overrides: { VALUE: "async" },
+        processEnv: false,
+        schema: environmentSchema,
+      },
+      schema: z.object({}),
+    });
+    expect(environmentResult.env.VALUE).toBe("async");
   });
 });

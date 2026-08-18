@@ -1,84 +1,105 @@
 {
-  "name": "@devscast/config",
-  "version": "1.1.1",
-  "description": "Helps you find, load, combine, autofill and validate configuration values of any kind",
-  "source": "./src/index.ts",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "module": "./dist/index.mjs",
-  "files": [
-    "dist",
-    "README.md"
-  ],
-  "scripts": {
-    "build": "tsup --minify",
-    "dev": "tsup --watch",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "============= HUSKY =============": "",
-    "prepare": "husky",
-    "commit": "cz",
-    "=========== CODE STYLE ============": "",
-    "lint": "biome check && biome lint",
-    "format": "biome format --write && biome check --write && biome lint --write",
-    "typecheck": "tsc --noEmit",
-    "=========== NPM PUBLISH ==============": "",
-    "release": "npm run build && npm publish --access public",
-    "version": "changeset version"
+  "author": "bernard-ng <bernard@devscast.tech>",
+  "bugs": {
+    "url": "https://github.com/devscast/config-ts/issues"
   },
   "commitlint": {
     "extends": [
       "@commitlint/config-conventional"
     ]
   },
-  "config": {
-    "commitizen": {
-      "path": "cz-conventional-changelog"
-    }
+  "dependencies": {
+    "yaml": "^2.9.0"
   },
-  "keywords": [
-    "config",
-    "env"
+  "description": "Typed, immutable, schema-validated configuration for Node.js backend services",
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@biomejs/biome": "^2.5.9",
+    "@changesets/cli": "^3.0.0",
+    "@commitlint/cli": "^20.5.3",
+    "@commitlint/config-conventional": "^20.5.3",
+    "@types/node": "^24.13.3",
+    "@vitest/coverage-v8": "^4.1.10",
+    "husky": "^9.1.7",
+    "publint": "^0.3.23",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10",
+    "zod": "^4.4.3"
+  },
+  "engines": {
+    "node": "^20.17.0 || >=22.9.0"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
   ],
   "homepage": "https://github.com/devscast/config-ts#readme",
-  "bugs": {
-    "url": "https://github.com/devscast/config-ts/issues"
+  "keywords": [
+    "config",
+    "dotenv",
+    "env",
+    "environment",
+    "typescript",
+    "validation",
+    "yaml",
+    "zod"
+  ],
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "name": "@devscast/config",
+  "packageManager": "bun@1.3.14",
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "overrides": {
+    "ajv": "^8.20.0",
+    "brace-expansion": "^1.1.18",
+    "fast-uri": "^3.1.5",
+    "js-yaml": "^4.3.1",
+    "minimatch": "^3.1.5",
+    "nanoid": "^3.3.18",
+    "picomatch": "^4.0.5",
+    "postcss": "^8.5.26",
+    "rollup": "^4.62.4",
+    "vite": "^7.3.6"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/devscast/config-ts.git"
   },
-  "license": "MIT",
-  "author": "bernard-ng <bernard@devscast.tech>",
-  "devDependencies": {
-    "@biomejs/biome": "^2.3.7",
-    "@changesets/cli": "^2.29.7",
-    "@commitlint/cli": "^20.1.0",
-    "@commitlint/config-conventional": "^20.0.0",
-    "@types/ini": "^4.1.1",
-    "@types/node": "^24.10.1",
-    "@types/yaml": "^1.9.7",
-    "commitizen": "^4.3.1",
-    "cz-conventional-changelog": "^3.3.0",
-    "husky": "^9.1.7",
-    "ini": "^6.0.0",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.13",
-    "yaml": "^2.8.1",
-    "zod": "^4.1.12"
+  "scripts": {
+    "build": "tsup --minify",
+    "check:package": "publint --strict && attw --pack .",
+    "dev": "tsup --watch",
+    "format": "biome check --write .",
+    "lint": "biome check .",
+    "prepack": "bun run build",
+    "prepare": "husky",
+    "release": "npm publish --access public --provenance",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "version": "changeset version"
   },
-  "peerDependencies": {
-    "ini": "^6.0.0",
-    "yaml": "^2.8.1",
-    "zod": "^4.1.12"
-  },
-  "peerDependenciesMeta": {
-    "ini": {
-      "optional": true
-    },
-    "yaml": {
-      "optional": true
-    }
-  }
+  "sideEffects": false,
+  "source": "./src/index.ts",
+  "types": "./dist/index.d.ts",
+  "type": "commonjs",
+  "version": "1.1.1"
 }

@@ -1,21 +1,30 @@
 # Config : Typesafe configuration loader
+
 ![npm](https://img.shields.io/npm/v/@devscast/config?style=flat-square)
 ![npm](https://img.shields.io/npm/dt/@devscast/config?style=flat-square)
-[![Lint](https://github.com/devscast/config-ts/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/devscast/config-ts/actions/workflows/lint.yml)
-[![Tests](https://github.com/devscast/config-ts/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/devscast/config-ts/actions/workflows/test.yml)
-![GitHub](https://img.shields.io/github/license/devscast/config-ts?style=flat-square)
+[![Lint](https://github.com/devscast/config/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/devscast/config/actions/workflows/lint.yml)
+[![Tests](https://github.com/devscast/config/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/devscast/config/actions/workflows/test.yml)
+![GitHub](https://img.shields.io/github/license/devscast/config?style=flat-square)
 
 ---
 
-## Overview
+`@devscast/config` loads explicit environment and configuration sources, resolves environment references, validates everything with Zod, and returns deeply readonly values with full TypeScript inference.
 
-`@devscast/config` provides a batteries-included configuration loader for Node.js projects. It lets you:
+## Why v2
 
-- Load configuration from JSON, YAML, INI, or inline objects defined in code
-- Reference environment variables in text files with the `%env(FOO)%` syntax
-- Bootstrap environment values from `.env` files (including `.env.local`, `.env.<env>`, `.env.<env>.local`)
-- Validate the resulting configuration with a [Zod v4](https://zod.dev) schema before your app starts
-- Use the typed `env()` helper throughout your app for safe access to `process.env`
+- One async startup API for local files, remote providers, and async validation
+- Schema-derived environment autocomplete and native value types
+- Explicit JSON, YAML, inline, and provider sources
+- Deterministic precedence with concurrent provider loading
+- No mutation of `process.env` or caller-owned values
+- Aggregated, structured, and secret-aware diagnostics
+- Immutable configuration with source provenance
+- No shell execution, automatic file discovery, or ambiguous source objects
+
+## Requirements
+
+- Node.js 20.17 or newer
+- Zod 4
 
 ## Installation
 
@@ -23,188 +32,450 @@
 npm install @devscast/config zod
 ```
 
-> `@devscast/config` treats [Zod v4](https://zod.dev) as a required peer dependency, so make sure it is present in your project.
-> This package imports from `zod/mini` internally to keep bundles lean. If your schemas only rely on the features exposed by the mini build (objects, strings, numbers, enums, unions, coercion, effects, etc.), consider importing `z` from `zod/mini` in your own code as well for consistent tree-shaking.
-> **Need YAML or INI parsing?** Install the optional peers alongside the core package:
->
-> ```bash
-> npm install yaml ini
-> ```
+JSON and YAML support are included. Zod remains a peer dependency so applications control their validation version.
 
-### Example Usage
+## Quick start
 
-```ts
-import path from "node:path";
-import { z } from "zod/mini";
-import { defineConfig } from "@devscast/config";
+Create an environment file:
 
-const schema = z.object({
-  database: z.object({
-    host: z.string(),
-    port: z.coerce.number(),
-    username: z.string(),
-    password: z.string(),
-  }),
-  featureFlags: z.array(z.string()).default([]),
-});
-
-const { config, env } = defineConfig({
-  schema,
-  cwd: process.cwd(),
-  env: { path: path.join(process.cwd(), ".env") },
-  sources: [
-    path.join("config", "default.yaml"),
-    { path: path.join("config", `${env("NODE_ENV", { default: "dev" })}.yaml`), optional: true },
-    { featureFlags: ["beta-search"] },
-  ],
-});
-
-console.log(config.database.host);
+```dotenv
+# .env
+PORT=3000
+DATABASE_URL=postgres://app:secret@localhost:5432/app
+LOGGER_PRETTY=false
 ```
 
-### Additional Use Cases
+Create a configuration source:
 
-#### Combine multiple formats with fallbacks
-
-```ts
-import path from "node:path";
-import { defineConfig } from "@devscast/config";
-
-const { config, env } = defineConfig({
-  schema,
-  env: true,
-  sources: [
-    path.join("config", "base.json"),
-    path.join("config", "defaults.yaml"),
-    { path: path.join("secrets", "overrides.ini"), optional: true },
-    { featureFlags: (env.optional("FEATURE_FLAGS") ?? "").split(",").filter(Boolean) },
-  ],
-});
+```yaml
+# config/base.yaml
+http:
+  host: "0.0.0.0"
+  port: "%env(PORT)%"
+database:
+  url: "%env(DATABASE_URL)%"
+logger:
+  pretty: "%env(LOGGER_PRETTY)%"
 ```
 
-- String entries infer the format from the extension; optional INI/YAML support depends on the peer deps above.
-- Inline objects in `sources` are merged last, so they are useful for computed values or environment overrides.
-
-#### Typed environment accessor for reusable helpers
+Define and export the application configuration:
 
 ```ts
-import { defineConfig } from "@devscast/config";
+// src/config.ts
+import { defineConfig, yamlFile } from "@devscast/config";
+import { z } from "zod";
 
-const { config, env } = defineConfig({
-  schema,
-  env: {
-    path: ".env",
-    knownKeys: ["NODE_ENV", "DB_HOST", "DB_PORT"] as const,
-  },
+const EnvironmentSchema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("production"),
+  PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
+  DATABASE_URL: z.url(),
+  LOGGER_PRETTY: z.stringbool().default(false),
 });
 
-export function createDatabaseUrl() {
-  return `postgres://${env("DB_HOST")}:${env("DB_PORT")}/app`;
-}
-```
-
-- Providing `knownKeys` narrows the `env` accessor typings, surfacing autocomplete within your app.
-- The accessor mirrors `process.env` but throws when a key is missing; switch to `env.optional("DB_HOST")` when the variable is truly optional.
-
-#### Environment-only configuration (no external files)
-
-```ts
-import { z } from "zod/mini";
-import { createEnvAccessor } from "@devscast/config";
-
-const schema = z.object({
-  appEnv: z.enum(["dev", "prod", "test"]).default("dev"),
-  port: z.coerce.number().int().min(1).max(65535).default(3000),
-  redisUrl: z.string().url(),
-});
-
-const env = createEnvAccessor(["NODE_ENV", "APP_PORT", "REDIS_URL"] as const);
-
-const config = schema.parse({
-  appEnv: env("NODE_ENV", { default: "dev" }),
-  port: Number(env("APP_PORT", { default: "3000" })),
-  redisUrl: env("REDIS_URL"),
-});
-```
-
-- `createEnvAccessor` gives you the same typed helper without invoking `defineConfig`, ideal for lightweight scripts.
-- You can still validate the derived values with Zod (or any other validator) before using them.
-
-#### Inline configuration objects (no compiled files)
-
-```ts
-import { z } from "zod/mini";
-import { defineConfig } from "@devscast/config";
-
-const schema = z.object({
-  database: z.object({
+const ConfigurationSchema = z.object({
+  http: z.object({
     host: z.string(),
     port: z.number(),
   }),
-  featureFlags: z.preprocess(
-    value => {
-      if (typeof value === "string") {
-        return value
-          .split(",")
-          .map(flag => flag.trim())
-          .filter(Boolean);
-      }
-      return value;
-    },
-    z.array(z.string())
-  ),
+  database: z.object({
+    url: z.url(),
+  }),
+  logger: z.object({
+    pretty: z.boolean(),
+  }),
 });
 
-const { config } = defineConfig({
-  schema,
-  env: { path: ".env" },
-  sources: {
-    database: { host: "%env(DB_HOST)%", port: "%env(number:DB_PORT)%" },
-    featureFlags: "%env(FEATURE_FLAGS)%",
+export const { config, env, metadata } = await defineConfig({
+  environment: {
+    schema: EnvironmentSchema,
+    files: [
+      { path: ".env", optional: true },
+      { path: ".env.local", optional: true },
+    ],
+    redact: ["DATABASE_URL"],
   },
+  schema: ConfigurationSchema,
+  sources: [yamlFile("config/base.yaml", { name: "base" })],
+});
+```
+
+Use the validated values during service startup:
+
+```ts
+import { config, env } from "./config";
+
+console.log(`Starting in ${env.NODE_ENV}`);
+
+server.listen({
+  host: config.http.host,
+  port: config.http.port,
+});
+```
+
+The inferred values are:
+
+```ts
+env.PORT; // number
+env.LOGGER_PRETTY; // boolean
+config.database.url; // string
+
+// Compile-time error: unknown environment key
+env.NOT_DECLARED;
+
+// Compile-time and runtime error: configuration is deeply readonly
+config.http.port = 4000;
+```
+
+## `defineConfig`
+
+`defineConfig` is intentionally async-only. A backend service should load configuration once during bootstrap and fail before accepting traffic when configuration is invalid.
+
+```ts
+const result = await defineConfig({
+  schema,
+  environment,
+  defaults,
+  sources,
+  cwd,
+});
+```
+
+| Option | Required | Description |
+| --- | --- | --- |
+| `schema` | Yes | Zod schema for the final merged configuration |
+| `environment` | No | Environment schema, dotenv files, process input, overrides, and redaction policy |
+| `defaults` | No | Initial values merged before every declared source |
+| `sources` | No | Ordered JSON, YAML, inline, or provider sources |
+| `cwd` | No | Base directory for relative paths; defaults to `process.cwd()` |
+
+The result contains:
+
+| Property | Description |
+| --- | --- |
+| `config` | Deeply readonly output of the configuration schema |
+| `env` | Deeply readonly output of the environment schema, or an empty object when none is configured |
+| `metadata` | Value-free source, environment, redaction, and provenance diagnostics |
+
+Both full Zod and Zod Mini schemas are supported.
+
+## Environment configuration
+
+The environment schema is the single source of truth for variable names, defaults, coercion, validation, and TypeScript autocomplete.
+
+```ts
+const EnvironmentSchema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("production"),
+  PORT: z.coerce.number().int().positive(),
+  DEBUG: z.stringbool().default(false),
+  OPTIONAL_TOKEN: z.string().optional(),
 });
 
-console.log(config.database);
+const result = await defineConfig({
+  environment: {
+    schema: EnvironmentSchema,
+    files: [".env", { path: ".env.local", optional: true }],
+    processEnv: process.env,
+    overrides: { NODE_ENV: "test" },
+    redact: ["OPTIONAL_TOKEN"],
+  },
+  schema: z.object({}),
+});
 ```
 
-- Inline objects remove the need for TypeScript config files while still allowing env interpolation.
-- Typed placeholders resolve after `.env` files load; use Zod preprocessors for shapes like comma-delimited lists.
+### Precedence
 
-### Referencing environment variables
+Raw environment values are applied from lowest to highest priority:
 
-- **Text-based configs** (JSON, YAML, INI): use `%env(DB_HOST)%`
-- **Typed placeholders**: `%env(number:PORT)%`, `%env(boolean:FEATURE)%`, `%env(string:NAME)%`
-  - When the entire value is a single placeholder, typed forms produce native values (number/boolean).
-  - When used inside larger strings (e.g. `"http://%env(API_HOST)%/v1"`), placeholders are interpolated as text.
-- **Inline objects**: placeholders work the same way; combine them with Zod preprocessors for complex shapes (arrays, URLs, etc.).
+1. Files in their declared order
+2. `processEnv`, which defaults to a snapshot of `process.env`
+3. Explicit `overrides`
 
-The `env()` helper throws when the variable is missing. Provide a default with `env("PORT", { default: "3000" })` or switch to `env.optional("PORT")`.
+The input is snapshotted before asynchronous work begins. Neither `process.env` nor a supplied `processEnv` or `overrides` object is modified.
 
-### Dotenv loading
+Use isolated inputs in tests or controlled deployments:
 
-`defineConfig` automatically understands `.env` files when the `env` option is provided. The resolver honours the following precedence, mirroring Symfony's Dotenv component:
-
-1. `.env` (or `.env.dist` when `.env` is missing)
-2. `.env.local` (skipped when `NODE_ENV === "test"`)
-3. `.env.<NODE_ENV>`
-4. `.env.<NODE_ENV>.local`
-
-Local files always win over base files. The loaded keys are registered on the shared `env` accessor so they show up in editor autocomplete once your editor reloads types.
-
-### Command expansion opt-in
-
-Command substitution via `$(...)` is now opt-in for `.env` files. By default these sequences are kept as literal strings. To re-enable shell execution, add a directive comment at the top of the file:
-
-```dotenv
-# @dotenv-expand-commands
-SECRET_KEY=$(openssl rand -hex 32)
+```ts
+environment: {
+  schema: EnvironmentSchema,
+  files: [".env.test"],
+  processEnv: false,
+  overrides: {
+    NODE_ENV: "test",
+    PORT: "4000",
+  },
+}
 ```
 
-Once the tag is present, all subsequent entries can use command expansion; omitting it keeps parsing side-effect free.
-If a command exits with a non-zero status or otherwise fails, the parser now keeps the original `$(...)` literal so `.env` loading continues without interruption.
+Environment files are required unless their entry uses `optional: true`. Files are never discovered automatically.
 
-## Contributors
+### Dotenv syntax
 
-<a href="https://github.com/devscast/config-ts/graphs/contributors" title="show all contributors">
-  <img src="https://contrib.rocks/image?repo=devscast/config-ts" alt="contributors"/>
-</a>
+Environment files support:
+
+- Blank lines, comments, and `export`
+- Unquoted, single-quoted, double-quoted, and multiline quoted values
+- `$NAME` and `${NAME}` expansion
+- `${NAME-default}` when a value is undefined
+- `${NAME:-default}` when a value is undefined or empty
+- Expansion from earlier file entries and the supplied process input
+
+Shell substitutions such as `$(command)` remain literal text and are never executed.
+
+For isolated low-level parsing, use `parseDotenv`:
+
+```ts
+import { parseDotenv } from "@devscast/config";
+
+const values = parseDotenv("URL=https://$HOST:$PORT", {
+  context: { HOST: "localhost", PORT: "3000" },
+  source: "generated.env",
+});
+```
+
+## Environment references
+
+Configuration sources reference validated environment output with `%env(NAME)%`.
+
+A whole-value reference preserves the Zod output type:
+
+```yaml
+http:
+  port: "%env(PORT)%" # number
+logger:
+  pretty: "%env(LOGGER_PRETTY)%" # boolean
+```
+
+An embedded reference is converted to a string:
+
+```yaml
+healthUrl: "https://%env(HOST)%:%env(PORT)%/health"
+```
+
+Missing references are collected and reported together with their configuration paths. Type coercion belongs in the environment schema rather than in the placeholder.
+
+## Configuration sources
+
+Every source is explicit and discriminated. Inline data can therefore safely contain ordinary fields named `path` or `type`.
+
+### JSON and YAML
+
+```ts
+import { jsonFile, yamlFile } from "@devscast/config";
+
+const sources = [
+  jsonFile("config/base.json", { name: "base" }),
+  yamlFile("config/production.yaml", {
+    name: "deployment",
+    optional: true,
+  }),
+];
+```
+
+Relative paths resolve from `cwd`. Missing optional sources are recorded in metadata with `loaded: false`; other read and parse failures stop startup.
+
+### Inline values
+
+```ts
+import { inline } from "@devscast/config";
+
+inline(
+  {
+    application: {
+      path: "/srv/application",
+      region: "af-south-1",
+    },
+  },
+  { name: "runtime" },
+);
+```
+
+### Providers
+
+Providers integrate secret managers, service discovery, or computed application values:
+
+```ts
+import { provider } from "@devscast/config";
+
+const sources = [
+  provider("vault", async () => ({
+    database: {
+      password: await vault.read("database/password"),
+    },
+  })),
+  provider("runtime", () => ({
+    application: {
+      region: "af-south-1",
+    },
+  })),
+];
+```
+
+A provider may return an immediate object or a promise-like value. Providers are fetched concurrently and their results are merged in declaration order. Provider failure messages and causes are discarded so upstream exceptions cannot expose secrets.
+
+### Merge behavior
+
+- Defaults are applied first
+- Sources are merged in declaration order
+- Later scalar values replace earlier values
+- Plain objects merge recursively
+- Arrays replace earlier arrays rather than concatenating
+- `undefined` values from a later source replace earlier values
+
+Sources and schema outputs may contain configuration-safe primitives, arrays, and plain objects. Cycles, functions, symbols, and mutable class instances are rejected before results are frozen.
+
+## Immutability
+
+`config`, `env`, and `metadata` are cloned and deeply frozen. The loader never freezes caller-owned defaults, inline values, provider results, schemas, or environment inputs.
+
+```ts
+const source = { http: { port: 3000 } };
+const result = await defineConfig({
+  schema: z.object({ http: z.object({ port: z.number() }) }),
+  sources: [inline(source)],
+});
+
+Object.isFrozen(source); // false
+Object.isFrozen(result.config); // true
+Object.isFrozen(result.config.http); // true
+```
+
+## Metadata and provenance
+
+Metadata contains operational context without configuration or environment values:
+
+```ts
+metadata.sources;
+// [{ type: "yaml", name: "base", path: "...", optional: false, loaded: true }]
+
+metadata.environment.keys;
+// ["DATABASE_URL", "NODE_ENV", "PORT"]
+
+metadata.environment.redactedKeys;
+// ["DATABASE_URL"]
+
+metadata.provenance["http.port"];
+// "base"
+```
+
+Provenance records the winning input source for each leaf path before schema transforms. Arrays and empty objects are treated as atomic leaf values because they are replaced as complete values during merging.
+
+## Errors
+
+All loading and validation failures use `ConfigurationError`:
+
+```ts
+import { ConfigurationError } from "@devscast/config";
+
+try {
+  await defineConfig(options);
+} catch (error) {
+  if (error instanceof ConfigurationError) {
+    logger.fatal({ code: error.code, issues: error.issues }, "Invalid configuration");
+    process.exitCode = 1;
+  }
+}
+```
+
+Environment validation, configuration validation, and missing environment references aggregate all issues found during that stage.
+
+| Code | Meaning |
+| --- | --- |
+| `CONFIG_INVALID` | Final configuration failed validation or produced an unsupported value |
+| `ENV_FILE_INVALID` | An environment file could not be read or parsed |
+| `ENV_FILE_MISSING` | A required environment file does not exist |
+| `ENV_INVALID` | Environment schema validation failed or produced an unsupported value |
+| `ENV_REFERENCE_MISSING` | One or more `%env(NAME)%` references could not be resolved |
+| `INVALID_OPTIONS` | Defaults or another option violated the API contract |
+| `SOURCE_INVALID` | A source could not be read, parsed, or represented safely |
+| `SOURCE_MISSING` | A required JSON or YAML source does not exist |
+| `SOURCE_UNAVAILABLE` | A provider failed to load |
+
+Keys listed in `environment.redact` receive generic validation and reference messages. Raw environment and configuration values are never stored in metadata or formatted package errors.
+
+## Testing configuration
+
+Prefer isolated environment input so tests never depend on or modify the runner process:
+
+```ts
+const result = await defineConfig({
+  environment: {
+    schema: EnvironmentSchema,
+    processEnv: false,
+    overrides: {
+      NODE_ENV: "test",
+      PORT: "4000",
+      DATABASE_URL: "postgres://test:test@localhost:5432/test",
+    },
+  },
+  schema: ConfigurationSchema,
+  sources: [inline(testConfiguration)],
+});
+```
+
+Because providers are ordinary functions, tests can replace remote integrations without mocking package internals.
+
+## CommonJS bootstrap
+
+CommonJS applications can load configuration from an async entry point:
+
+```ts
+async function main() {
+  const { config } = await defineConfig(options);
+  await startServer(config);
+}
+
+void main();
+```
+
+## Migrating from 1.1.1
+
+Version 2 is intentionally incompatible with the legacy API.
+
+Before:
+
+```ts
+const { config, env } = defineConfig({
+  env: {
+    knownKeys: ["PORT"],
+  },
+  schema,
+  sources: ["config.yaml"],
+});
+
+env("PORT");
+```
+
+After:
+
+```ts
+const { config, env } = await defineConfig({
+  environment: {
+    schema: z.object({
+      PORT: z.coerce.number().int().positive(),
+    }),
+    files: [{ path: ".env", optional: true }],
+  },
+  schema,
+  sources: [yamlFile("config.yaml")],
+});
+
+env.PORT;
+```
+
+Migration checklist:
+
+- Add `await` to `defineConfig` during application bootstrap
+- Replace `env`, `env: true`, and `knownKeys` with `environment: { schema, ... }`
+- Replace `env("NAME")` with property access such as `env.NAME`
+- Wrap sources with `jsonFile`, `yamlFile`, `inline`, or `provider`
+- Replace typed placeholders such as `%env(number:PORT)%` with `%env(PORT)%`
+- Move coercion and defaults into the environment schema
+- Declare environment files explicitly
+- Remove uses of `env.has`, `env.optional`, `env.keys`, `createEnvAccessor`, the shared `env` export, and `Dotenv`
+- Remove INI sources and dependencies
+- Remove command expansion directives; commands are never executed in v2
+- Treat returned configuration, environment, and metadata as deeply readonly
+
+## License
+
+MIT
