@@ -2,15 +2,15 @@ import { readFile } from "node:fs/promises";
 
 import * as z from "zod/v4/core";
 
-import { parseDotenv } from "./dotenv";
-import { ConfigurationError } from "./errors";
+import { parseDotenv } from "./dotenv.js";
+import { ConfigurationError } from "./errors.js";
 import type {
   ConfigObject,
   EnvironmentFile,
   EnvironmentMetadata,
   EnvironmentOptions,
   SourceMetadata,
-} from "./types";
+} from "./types.js";
 import {
   assignEnvironment,
   cloneEnvironment,
@@ -19,8 +19,8 @@ import {
   isPlainObject,
   mergeEnvironment,
   resolvePath,
-} from "./utils";
-import { validationError } from "./validation";
+} from "./utils.js";
+import { validationError } from "./validation.js";
 
 export interface LoadedEnvironment {
   readonly metadata: EnvironmentMetadata;

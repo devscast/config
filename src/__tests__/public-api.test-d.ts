@@ -1,7 +1,7 @@
 import { expectTypeOf } from "vitest";
 import * as z from "zod";
 
-import { type DeepReadonly, type DefineConfigOptions, defineConfig, inline } from "../index";
+import { type DeepReadonly, type DefineConfigOptions, defineConfig, inline } from "../index.js";
 
 async function verifyAsyncContract() {
   const result = await defineConfig({

@@ -1,6 +1,6 @@
 import type * as z from "zod/v4/core";
 
-import { ConfigurationError, type ConfigurationIssue } from "./errors";
+import { ConfigurationError, type ConfigurationIssue } from "./errors.js";
 
 /** Converts aggregated Zod issues into the package's stable, optionally redacted error model. */
 export function validationError(

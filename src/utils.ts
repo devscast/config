@@ -1,7 +1,7 @@
 import path from "node:path";
 
-import type { EnvironmentInput } from "./dotenv";
-import type { ConfigObject, DeepReadonly } from "./types";
+import type { EnvironmentInput } from "./dotenv.js";
+import type { ConfigObject, DeepReadonly } from "./types.js";
 
 export interface UnsupportedConfigValue {
   readonly message: string;

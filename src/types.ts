@@ -1,6 +1,6 @@
 import type * as z from "zod/v4/core";
 
-import type { EnvironmentInput } from "./dotenv";
+import type { EnvironmentInput } from "./dotenv.js";
 
 export type ConfigObject = Record<string, unknown>;
 export type EmptyEnvironment = Record<string, never>;

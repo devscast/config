@@ -1,4 +1,4 @@
-import { ConfigurationError } from "./errors";
+import { ConfigurationError } from "./errors.js";
 
 const VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*/;
 const EXPANSION = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)(?:(:-|-)([^}]*))?\}|([A-Za-z_][A-Za-z0-9_]*))/g;

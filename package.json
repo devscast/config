@@ -33,10 +33,6 @@
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/index.d.mts",
-        "default": "./dist/index.mjs"
-      },
-      "require": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
       }
@@ -60,7 +56,6 @@
   ],
   "license": "MIT",
   "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
   "name": "@devscast/config",
   "packageManager": "bun@1.3.14",
   "peerDependencies": {
@@ -84,7 +79,7 @@
   },
   "scripts": {
     "build": "tsup --minify",
-    "check:package": "publint --strict && attw --pack .",
+    "check:package": "publint --strict && attw --pack --profile esm-only .",
     "dev": "tsup --watch",
     "format": "biome check --write .",
     "lint": "biome check .",
@@ -100,6 +95,6 @@
   "sideEffects": false,
   "source": "./src/index.ts",
   "types": "./dist/index.d.ts",
-  "type": "commonjs",
-  "version": "1.1.1"
+  "type": "module",
+  "version": "2.0.0"
 }

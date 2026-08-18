@@ -4,9 +4,9 @@ import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import * as mini from "zod/mini";
 
-import { defineConfig } from "../config";
-import { ConfigurationError } from "../errors";
-import { inline, jsonFile, provider, yamlFile } from "../sources";
+import { defineConfig } from "../config.js";
+import { ConfigurationError } from "../errors.js";
+import { inline, jsonFile, provider, yamlFile } from "../sources.js";
 
 const fixtures = path.resolve(__dirname, "fixtures");
 const environmentFixtures = path.join(fixtures, "env");

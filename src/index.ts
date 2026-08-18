@@ -1,16 +1,16 @@
-export { defineConfig } from "./config";
-export { type EnvironmentInput, type ParseDotenvOptions, parseDotenv } from "./dotenv";
+export { defineConfig } from "./config.js";
+export { type EnvironmentInput, type ParseDotenvOptions, parseDotenv } from "./dotenv.js";
 export {
   ConfigurationError,
   type ConfigurationErrorCode,
   type ConfigurationIssue,
-} from "./errors";
+} from "./errors.js";
 export {
   inline,
   jsonFile,
   provider,
   yamlFile,
-} from "./sources";
+} from "./sources.js";
 export type {
   ConfigMetadata,
   ConfigObject,
@@ -27,4 +27,4 @@ export type {
   ProviderSource,
   SourceMetadata,
   YamlSource,
-} from "./types";
+} from "./types.js";

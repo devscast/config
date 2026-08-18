@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { parseDotenv } from "../dotenv";
-import { ConfigurationError } from "../errors";
+import { parseDotenv } from "../dotenv.js";
+import { ConfigurationError } from "../errors.js";
 
 describe("parseDotenv", () => {
   it("parses standard assignments, comments, exports, and quotes", () => {

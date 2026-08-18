@@ -1,13 +1,13 @@
-import { ConfigurationError, type ConfigurationIssue } from "./errors";
-import type { ResolvedSource } from "./sources";
-import type { ConfigObject } from "./types";
+import { ConfigurationError, type ConfigurationIssue } from "./errors.js";
+import type { ResolvedSource } from "./sources.js";
+import type { ConfigObject } from "./types.js";
 import {
   cloneValue,
   findUnsupportedConfigValue,
   isPlainObject,
   mergeValues,
   setOwn,
-} from "./utils";
+} from "./utils.js";
 
 const ENV_REFERENCE_ANY = /%env\(([A-Za-z_][A-Za-z0-9_]*)\)%/g;
 const ENV_REFERENCE_FULL = /^%env\(([A-Za-z_][A-Za-z0-9_]*)\)%$/;

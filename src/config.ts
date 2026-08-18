@@ -1,12 +1,17 @@
 import * as z from "zod/v4/core";
 
-import { type LoadedEnvironment, loadEnvironment } from "./environment";
-import { ConfigurationError } from "./errors";
-import { mergeResolvedValues, resolveEnvironmentReferences } from "./interpolate";
-import { type ResolvedSource, resolveSources } from "./sources";
-import type { ConfigMetadata, ConfigResult, DefineConfigOptions, EmptyEnvironment } from "./types";
-import { cloneValue, deepFreeze, findUnsupportedConfigValue, resolveCwd } from "./utils";
-import { validationError } from "./validation";
+import { type LoadedEnvironment, loadEnvironment } from "./environment.js";
+import { ConfigurationError } from "./errors.js";
+import { mergeResolvedValues, resolveEnvironmentReferences } from "./interpolate.js";
+import { type ResolvedSource, resolveSources } from "./sources.js";
+import type {
+  ConfigMetadata,
+  ConfigResult,
+  DefineConfigOptions,
+  EmptyEnvironment,
+} from "./types.js";
+import { cloneValue, deepFreeze, findUnsupportedConfigValue, resolveCwd } from "./utils.js";
+import { validationError } from "./validation.js";
 
 interface UnfrozenResult {
   readonly config: unknown;

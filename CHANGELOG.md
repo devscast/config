@@ -10,7 +10,8 @@
 - Replaced the stateful dotenv loader with an isolated parser that never mutates `process.env` or executes commands.
 - Removed automatic environment discovery, legacy environment accessors, Dotenv classes, typed placeholder prefixes, INI parsing, and ambiguous source shapes.
 - Added support for full and mini Zod schemas through the Zod core API.
-- Modernized CommonJS/ESM package exports, Node.js targets, dependency ownership, CI, formatting, coverage, and public type exports.
+- Moved the package to a single native ESM distribution and removed CommonJS exports.
+- Modernized Node.js targets, dependency ownership, CI, formatting, coverage, and public type exports.
 - Removed the legacy Commitizen prompt stack and pinned patched transitive tooling releases following a dependency audit.
 - Reorganized the implementation into focused configuration, environment, source, interpolation, validation, error, type, and utility modules.
 - Added published TSDoc contracts for the configuration loaders, source factories, dotenv parser, and internal pipeline utilities.

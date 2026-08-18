@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import * as YAML from "yaml";
 
-import { ConfigurationError } from "./errors";
+import { ConfigurationError } from "./errors.js";
 import type {
   ConfigObject,
   ConfigSource,
@@ -12,14 +12,14 @@ import type {
   ProviderSource,
   SourceMetadata,
   YamlSource,
-} from "./types";
+} from "./types.js";
 import {
   cloneValue,
   findUnsupportedConfigValue,
   isMissingFile,
   isPlainObject,
   resolvePath,
-} from "./utils";
+} from "./utils.js";
 
 export interface ResolvedSource {
   readonly metadata: SourceMetadata;

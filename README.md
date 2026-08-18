@@ -24,6 +24,7 @@
 ## Requirements
 
 - Node.js 20.17 or newer
+- An ESM application (`"type": "module"` or an `.mjs` entry point)
 - Zod 4
 
 ## Installation
@@ -414,17 +415,23 @@ const result = await defineConfig({
 
 Because providers are ordinary functions, tests can replace remote integrations without mocking package internals.
 
-## CommonJS bootstrap
+## ESM runtime
 
-CommonJS applications can load configuration from an async entry point:
+Version 2 is ESM-only. Declare ESM in the consuming application's `package.json`:
+
+```json
+{
+  "type": "module"
+}
+```
+
+Then load configuration from an ESM bootstrap. Top-level `await` is supported, or it can remain inside the application's async startup function:
 
 ```ts
-async function main() {
-  const { config } = await defineConfig(options);
-  await startServer(config);
-}
+import { defineConfig } from "@devscast/config";
 
-void main();
+const { config } = await defineConfig(options);
+await startServer(config);
 ```
 
 ## Migrating from 1.1.1
