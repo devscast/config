@@ -1,4 +1,19 @@
-# @devscast/config
+# Changelog
+
+All notable changes to `@ngandu-dev/config` are documented in this file. This project follows
+[Semantic Versioning](https://semver.org/).
+
+## 3.0.0
+
+### Changed
+
+- Renamed the package to `@ngandu-dev/config`.
+- Updated project ownership, package metadata, documentation, and maintenance conventions for the
+  Ngandu organization.
+
+### Removed
+
+- Removed support for the former package coordinate.
 
 ## 2.0.0
 

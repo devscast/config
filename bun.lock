@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "@devscast/config",
+      "name": "@ngandu-dev/config",
       "dependencies": {
         "yaml": "^2.9.0",
       },

@@ -1,42 +1,33 @@
-name: Tests
+name: Test
+
 on:
-  workflow_call:
   push:
+    branches: [main, master]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   test:
-    name: test (Node.js ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [20.17.0, 24]
-
+        node-version: ["20.17.0", "24"]
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Cache Bun Dependencies
-        uses: actions/cache@v4
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@v2
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: Install Dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Run Tests
-        run: |
-          bun run test:coverage
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run test

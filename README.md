@@ -1,16 +1,16 @@
 # Config : Typesafe configuration loader
 
-![npm](https://img.shields.io/npm/v/@devscast/config?style=flat-square)
-![npm](https://img.shields.io/npm/dt/@devscast/config?style=flat-square)
-[![Lint](https://github.com/devscast/config/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/devscast/config/actions/workflows/lint.yml)
-[![Tests](https://github.com/devscast/config/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/devscast/config/actions/workflows/test.yml)
-![GitHub](https://img.shields.io/github/license/devscast/config?style=flat-square)
+![npm](https://img.shields.io/npm/v/@ngandu-dev/config?style=flat-square)
+![npm](https://img.shields.io/npm/dt/@ngandu-dev/config?style=flat-square)
+[![Quality](https://github.com/ngandu-dev/config/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/ngandu-dev/config/actions/workflows/quality.yml)
+[![Tests](https://github.com/ngandu-dev/config/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/ngandu-dev/config/actions/workflows/test.yml)
+![GitHub](https://img.shields.io/github/license/ngandu-dev/config?style=flat-square)
 
 ---
 
-`@devscast/config` loads explicit environment and configuration sources, resolves environment references, validates everything with Zod, and returns deeply readonly values with full TypeScript inference.
+`@ngandu-dev/config` loads explicit environment and configuration sources, resolves environment references, validates everything with Zod, and returns deeply readonly values with full TypeScript inference.
 
-## Why v2
+## Features
 
 - One async startup API for local files, remote providers, and async validation
 - Schema-derived environment autocomplete and native value types
@@ -30,7 +30,7 @@
 ## Installation
 
 ```bash
-npm install @devscast/config zod
+npm install @ngandu-dev/config zod
 ```
 
 JSON and YAML support are included. Zod remains a peer dependency so applications control their validation version.
@@ -63,7 +63,7 @@ Define and export the application configuration:
 
 ```ts
 // src/config.ts
-import { defineConfig, yamlFile } from "@devscast/config";
+import { defineConfig, yamlFile } from "@ngandu-dev/config";
 import { z } from "zod";
 
 const EnvironmentSchema = z.object({
@@ -225,7 +225,7 @@ Shell substitutions such as `$(command)` remain literal text and are never execu
 For isolated low-level parsing, use `parseDotenv`:
 
 ```ts
-import { parseDotenv } from "@devscast/config";
+import { parseDotenv } from "@ngandu-dev/config";
 
 const values = parseDotenv("URL=https://$HOST:$PORT", {
   context: { HOST: "localhost", PORT: "3000" },
@@ -261,7 +261,7 @@ Every source is explicit and discriminated. Inline data can therefore safely con
 ### JSON and YAML
 
 ```ts
-import { jsonFile, yamlFile } from "@devscast/config";
+import { jsonFile, yamlFile } from "@ngandu-dev/config";
 
 const sources = [
   jsonFile("config/base.json", { name: "base" }),
@@ -277,7 +277,7 @@ Relative paths resolve from `cwd`. Missing optional sources are recorded in meta
 ### Inline values
 
 ```ts
-import { inline } from "@devscast/config";
+import { inline } from "@ngandu-dev/config";
 
 inline(
   {
@@ -295,7 +295,7 @@ inline(
 Providers integrate secret managers, service discovery, or computed application values:
 
 ```ts
-import { provider } from "@devscast/config";
+import { provider } from "@ngandu-dev/config";
 
 const sources = [
   provider("vault", async () => ({
@@ -365,7 +365,7 @@ Provenance records the winning input source for each leaf path before schema tra
 All loading and validation failures use `ConfigurationError`:
 
 ```ts
-import { ConfigurationError } from "@devscast/config";
+import { ConfigurationError } from "@ngandu-dev/config";
 
 try {
   await defineConfig(options);
@@ -428,15 +428,19 @@ Version 2 is ESM-only. Declare ESM in the consuming application's `package.json`
 Then load configuration from an ESM bootstrap. Top-level `await` is supported, or it can remain inside the application's async startup function:
 
 ```ts
-import { defineConfig } from "@devscast/config";
+import { defineConfig } from "@ngandu-dev/config";
 
 const { config } = await defineConfig(options);
 await startServer(config);
 ```
 
-## Migrating from 1.1.1
+## Migrating to `@ngandu-dev/config`
 
-Version 2 is intentionally incompatible with the legacy API.
+Version 3 is published under a new organization and is intentionally incompatible with the old
+package coordinate. Install and import `@ngandu-dev/config`; no compatibility package or legacy
+scope is provided. The configuration API introduced in version 2 remains the basis of version 3.
+
+### Migrating from 1.1.1
 
 Before:
 
@@ -483,6 +487,30 @@ Migration checklist:
 - Remove command expansion directives; commands are never executed in v2
 - Treat returned configuration, environment, and metadata as deeply readonly
 
+## Development
+
+Install dependencies with `bun install`, then run `bun run quality` before opening a pull request.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete contribution workflow.
+
+## Testing
+
+Run `bun run test` for the test suite or `bun run test:coverage` for a coverage report.
+
+## Contributing
+
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and follow our
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security
+
+Please report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
 ## License
 
-MIT
+Released under the [MIT License](LICENSE).
+
+## Contributors
+
+<a href="https://github.com/ngandu-dev/config/graphs/contributors" title="Show all contributors">
+  <img src="https://contrib.rocks/image?repo=ngandu-dev/config" alt="Contributors" />
+</a>
